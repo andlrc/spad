@@ -1,0 +1,18 @@
+STYLE GUIDE:
+
+	1) Indentation
+		Tabs are 8 characters, and thus indentation are also are also 8
+		characters.
+
+	2) Breaking long lines and string
+		The limit on the length of lines is 80 columns and this is 
+		strongy preferred limit.
+
+		Statements longer than 80 columns will be broken into sensible
+		chunks, unless exceeding 80 columns significantly increases the
+		readability and does not hide information.
+
+	In general sticking to GNU's indent with the following flags should
+	be sufficient:
+
+		$ indent -kr -i8 file...

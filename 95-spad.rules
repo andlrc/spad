@@ -1,0 +1,4 @@
+# udev rule should be placed in /etc/udev/rules.d or /lib/udev/rules.d
+
+# 0ab1:0002 FEIG ELECTRONIC GmbH OBID RFID-Reader
+SUBSYSTEM=="usb", ATTR{idVendor}=="0ab1", ATTR{idProduct}=="0002", MODE="0666"
