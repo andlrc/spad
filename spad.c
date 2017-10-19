@@ -13,6 +13,34 @@
 #define	SPAD_MSB(n)	((n & 0xFF00) >> 8)
 #define	SPAD_LSB(n)	(n & 0xFF)
 
+const char *spad_strerror(enum spad_errors errno)
+{
+	switch (errno) {
+	case SPAD_SUCCESS:
+		return "Success";
+	case SPAD_ENOTRANS:
+		return "No Transponder is located within the detection range of the Reader";
+	case SPAD_ECRC:
+		return "CRC16 data error at received data.";
+	case SPAD_EWRITE:
+		return "Attempt to write on a read-only storing-area.";
+	case SPAD_EADDR:
+		return "The address is beyond the max. address space of the Transponder.";
+	case SPAD_EWRTRANS:
+		return "A special command is not applicable to the Transponder.";
+	case SPAD_ELENGTH:
+		return "Protocol is too short or too long";
+	case SPAD_ELIBUSB:
+		return "libusb errors";
+	case SPAD_EERRNO:
+		return "stdlib errors";
+	case SPAD_EUNKNOWN:
+		return "Unspecified error";
+	}
+
+	return "Unknown errno";
+}
+
 void spad_dumphex(void *buf, int siz)
 {
 	int i;
@@ -25,56 +53,13 @@ void spad_dumphex(void *buf, int siz)
 	}
 }
 
-int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb)
-{
-	unsigned char reqbuf[] = { 0xB0, 0x01, 0x00 };
-	static unsigned char resbuf[0xFFFF];
-	int reslen;
-	int tagcnt;
-	int i;
-	unsigned char *tag;
-
-	if (spad_write(ctx, reqbuf, sizeof(reqbuf), TIMEOUT) == -1)
-		return -1;
-
-	if ((reslen =
-	     spad_read(ctx, resbuf, sizeof(resbuf), TIMEOUT)) == -1)
-		return -1;
-
-	if (resbuf[0] != 0xB0) {	/* CONTROL-BYTE */
-		return -1;
-	}
-
-	if (resbuf[1] != 0x00) {	/* STATUS, could be 0x94 if more tags are able to be read */
-		return -1;
-	}
-
-	/* Tags is the following:
-	 * 1:           CONTROL-BYTE
-	 * 2:           STATUS
-	 * 3:           TAG COUNT
-	 * [
-	 *   1-2:       TAG TYPE
-	 *   3-10:      TAG VALUE
-	 * ] 4..n
-	 */
-	tagcnt = resbuf[2];
-
-	for (i = 0; i < tagcnt; i++) {
-		tag = resbuf + 3 + 10 * i;
-		cb(tag, tag + 2);
-	}
-
-	return 0;
-}
-
 int spad_init(struct spad_context *ctx)
 {
 	int rc;
 	int debuglvl = LIBUSB_LOG_LEVEL_ERROR;
 	char *debug;
 	if ((rc = libusb_init(&ctx->usb_context)) != 0)
-		return -1;
+		return SPAD_ELIBUSB;
 
 	debug = getenv("SPAD_DEBUG");
 	if (debug && *debug) {
@@ -86,17 +71,17 @@ int spad_init(struct spad_context *ctx)
 	    libusb_open_device_with_vid_pid(ctx->usb_context, VENDOR_ID,
 					    PRODUCT_ID);
 	if (!ctx->dev_handle)
-		return -1;
+		return SPAD_ELIBUSB;
 
 	if (libusb_kernel_driver_active(ctx->dev_handle, INTERFACE))
 		if ((rc = libusb_detach_kernel_driver(ctx->dev_handle,
 						      INTERFACE)) != 0)
-			return -1;
+			return SPAD_ELIBUSB;
 
 	if ((rc = libusb_claim_interface(ctx->dev_handle, INTERFACE)))
-		return -1;
+		return SPAD_ELIBUSB;
 
-	return 0;
+	return SPAD_SUCCESS;
 }
 
 unsigned int spad_crc(unsigned char *buf, int bufsiz)
@@ -140,7 +125,7 @@ int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,
 	 */
 	bufsiz = reqsiz + 6;
 	if (!(buf = malloc(bufsiz)))
-		return -1;
+		return SPAD_EERRNO;
 
 	buf[0] = 0x02;
 	buf[1] = SPAD_MSB(bufsiz);
@@ -159,9 +144,9 @@ int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,
 	free(buf);
 
 	if (rc != LIBUSB_SUCCESS || written != bufsiz)
-		return -1;
+		return SPAD_ELENGTH;
 
-	return 0;
+	return SPAD_SUCCESS;
 }
 
 int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
@@ -178,13 +163,13 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 	 * 2:           MSB ALENGTH
 	 * 3:           LSB ALENGTH
 	 * 4:           COM-ADR
-	 * 5..n-2:      { CONTROL-BYTE STATSUS DATA }
+	 * 5..n-2:      { CONTROL-BYTE STATUS DATA }
 	 * n-1:         LSB CRC16
 	 * n:           MSB CRC16
 	 */
 	bufsiz = ressiz + 6;
 	if (!(buf = malloc(bufsiz)))
-		return -1;
+		return SPAD_EERRNO;
 
 	rc = libusb_bulk_transfer(ctx->dev_handle,
 				  0x81 | LIBUSB_ENDPOINT_IN,
@@ -192,7 +177,7 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 
 	if (rc != LIBUSB_SUCCESS) {
 		free(buf);
-		return -1;
+		return SPAD_ELIBUSB;
 	}
 
 	/* Validate Checksum */
@@ -200,13 +185,20 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 	if (buf[received - 2] != SPAD_LSB(crc) ||
 	    buf[received - 1] != SPAD_MSB(crc)) {
 		free(buf);
-		return -1;
+		return SPAD_ECRC;
 	}
 
 	/* Validate Length */
 	if (buf[1] != SPAD_MSB(received) || buf[2] != SPAD_LSB(received)) {
 		free(buf);
-		return -1;
+		return SPAD_ELENGTH;
+	}
+
+	/* Check status */
+	if (buf[5] != 0x00) {
+		rc = 0 - (int) buf[5];
+		free(buf);
+		return rc;
 	}
 
 	memcpy(resbuf, buf + 4, received - 6);
@@ -214,14 +206,52 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 	return received - 6;
 }
 
+int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb)
+{
+	unsigned char reqbuf[] = { 0xB0, 0x01, 0x00 };
+	static unsigned char resbuf[0xFFFF];
+	int rc;
+	int reslen;
+	int tagcnt;
+	int i;
+	unsigned char *tag;
+
+	if ((rc = spad_write(ctx, reqbuf, sizeof(reqbuf), TIMEOUT)) < 0)
+		return rc;
+
+	if ((reslen = spad_read(ctx, resbuf, sizeof(resbuf), TIMEOUT)) < 0)
+		return reslen;
+
+	if (resbuf[0] != 0xB0)	/* CONTROL-BYTE */
+		return SPAD_EUNKNOWN;
+
+	/* Tags is the following:
+	 * 1:           CONTROL-BYTE
+	 * 2:           STATUS
+	 * 3:           TAG COUNT
+	 * [
+	 *   1-2:       TAG TYPE
+	 *   3-10:      TAG VALUE
+	 * ] 4..n
+	 */
+	tagcnt = resbuf[2];
+
+	for (i = 0; i < tagcnt; i++) {
+		tag = resbuf + 3 + 10 * i;
+		cb(tag, tag + 2);
+	}
+
+	return SPAD_SUCCESS;
+}
+
 int spad_exit(struct spad_context *ctx)
 {
 	int rc;
 	if ((rc = libusb_release_interface(ctx->dev_handle, INTERFACE)))
-		return -1;
+		return SPAD_ELIBUSB;
 
 	libusb_close(ctx->dev_handle);
 	libusb_exit(ctx->usb_context);
 
-	return 0;
+	return SPAD_SUCCESS;
 }

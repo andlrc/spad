@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define	TAG_SIZE	8
 static struct {
@@ -39,8 +40,10 @@ void inv_cb(unsigned char type[2], unsigned char tag[8])
 int main(void)
 {
 	struct spad_context ctx;
-	if (spad_init(&ctx) == -1) {
-		fprintf(stderr, "Failed to initialize device\n");
+	int rc;
+
+	if ((rc = spad_init(&ctx)) < 0) {
+		fprintf(stderr, "%s\n", spad_strerror(rc));
 		return 1;
 	}
 
@@ -52,8 +55,12 @@ int main(void)
 		return 1;
 	}
 
-	for (;;)
-		spad_inventory(&ctx, inv_cb);
+	for (;;) {
+		if ((rc = spad_inventory(&ctx, inv_cb)) < 0)
+			fprintf(stderr, "%d, %s\n", rc, spad_strerror(rc));
+		sleep(1);
+	}
+
 	spad_exit(&ctx);
 
 	return 0;
