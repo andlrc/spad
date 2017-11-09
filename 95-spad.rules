@@ -2,3 +2,6 @@
 
 # 0ab1:0002 FEIG ELECTRONIC GmbH OBID RFID-Reader
 SUBSYSTEM=="usb", ATTR{idVendor}=="0ab1", ATTR{idProduct}=="0002", MODE="0666"
+
+# 0ab1:0004 FEIG ELECTRONIC GmbH OBID classic-pro
+SUBSYSTEM=="usb", ATTR{idVendor}=="0ab1", ATTR{idProduct}=="0004", MODE="0666"

@@ -4,6 +4,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#define	PROGRAM_NAME	"spad"
+#define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME " <vendor:product>...\n"
 #define	TAG_SIZE	8
 static struct {
 	unsigned char *tags;
@@ -11,7 +13,16 @@ static struct {
 	int length;
 } seentags;
 
-void inv_cb(unsigned char type[2], unsigned char tag[8])
+static void print_help(void)
+{
+	printf(PROGRAM_USAGE "\n"
+	       "  -1    use the device '0ab1:0002'\n"
+	       "  -2    use the device '0ab1:0004'\n"
+	       "\n"
+	       "  -h    show this help and exit\n");
+}
+
+static void inv_cb(unsigned char type[2], unsigned char tag[8])
 {
 	unsigned char *seentmp;
 	int i;
@@ -33,18 +44,62 @@ void inv_cb(unsigned char type[2], unsigned char tag[8])
 
 	memcpy(seentags.tags + seentags.length * TAG_SIZE, tag, TAG_SIZE);
 	seentags.length++;
-	type = type;
-	spad_dumphex(tag, 8);
+	/* type = byte byte, tag[0], tag[1], tag[2], tag[3], tag[4], tag[5],
+	 * tag[6], tag[7] */
+	spad_dumphex(type, 10);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+	struct spad_context ctxs[8];
+	int ctxcnt;
 	struct spad_context ctx;
 	int rc;
+	int c;
+	int i;
+	char *endp;
 
-	if ((rc = spad_init(&ctx)) < 0) {
-		fprintf(stderr, "%s\n", spad_strerror(rc));
+	memset(ctxs, 0, sizeof(ctxs));
+	ctxcnt = 0;
+
+	while ((c = getopt(argc, argv, "h12")) != -1) {
+		switch (c) {
+		case 'h':
+			print_help();
+			return 0;
+		case '1':
+			ctxs[ctxcnt].vendor_id = 0x0AB1;
+			ctxs[ctxcnt].product_id = 0x0002;
+			ctxcnt++;
+			break;
+		case '2':
+			ctxs[ctxcnt].vendor_id = 0x0AB1;
+			ctxs[ctxcnt].product_id = 0x0004;
+			ctxcnt++;
+			break;
+		default:
+			fprintf(stderr, PROGRAM_USAGE);
+			return 1;
+		}
+	}
+
+	for (i = optind; i < argc; i++) {
+		ctxs[ctxcnt].vendor_id = strtol(argv[i], &endp, 16);
+		ctxs[ctxcnt].product_id = strtol(endp + 1, 0, 16);
+		ctxcnt++;
+	}
+
+	if (!ctxcnt) {
+		fprintf(stderr, PROGRAM_USAGE);
 		return 1;
+	}
+
+	for (i = 0; i < ctxcnt; i++) {
+		ctx = ctxs[i];
+		if ((rc = spad_init(&ctx))) {
+			fprintf(stderr, "%s\n", spad_strerror(rc));
+			return 1;
+		}
 	}
 
 	seentags.size = 16;
@@ -56,12 +111,17 @@ int main(void)
 	}
 
 	for (;;) {
-		if ((rc = spad_inventory(&ctx, inv_cb)) < 0)
-			fprintf(stderr, "%d, %s\n", rc, spad_strerror(rc));
-		sleep(1);
+		for (i = 0; i < ctxcnt; i++) {
+			ctx = ctxs[i];
+			if ((rc = spad_inventory(&ctx, inv_cb)))
+				fprintf(stderr, "%d, %s\n", rc, spad_strerror(rc));
+			sleep(1);
+		}
 	}
 
-	spad_exit(&ctx);
+	for (i = 0; i < ctxcnt; i++) {
+		spad_exit(&ctx);
+	}
 
 	return 0;
 }

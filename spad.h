@@ -3,27 +3,38 @@
 #include <libusb-1.0/libusb.h>
 
 struct spad_context {
+	int vendor_id;
+	int product_id;
 	struct libusb_context *usb_context;
 	struct libusb_device_handle *dev_handle;
 };
 
 typedef void (*spad_inventory_callback) (unsigned char tagtype[2],
 					 unsigned char tag[8]);
-enum spad_errors {
-	SPAD_SUCCESS	=  0x00,	/* Data / parameters have been read or stored without error */
-	SPAD_ENOTRANS	= -0x01,	/* No Transponder is located within the detection range of the Reader */
-	SPAD_ECRC	= -0x02,	/* CRC16 data error at received data. */
-	SPAD_EWRITE	= -0x03,	/* Attempt to write on a read-only storing-area. */
-	SPAD_EADDR	= -0x04,	/* The address is beyond the max. address space of the Transponder. */
-	SPAD_EWRTRANS	= -0x05,	/* A special command is not applicable to the Transponder. */
-	SPAD_ELENGTH	= -0x81,	/* Protocol is too short or too long */
-	/* Custom */
-	SPAD_ELIBUSB	= -0xFD,	/* libusb errors */
-	SPAD_EERRNO	= -0xFE,	/* stdlib errors */
-	SPAD_EUNKNOWN	= -0xFF		/* other, unclassified errors */
-};
 
-const char *spad_strerror(enum spad_errors errno);
+#define	SPAD_SUCCESS	0
+/* Scanner errors */
+#define ESPAD_SCAN	0x0100
+#define	ESPAD_NOTRANS	(ESPAD_SCAN | 0x0001)
+#define	ESPAD_CRC	(ESPAD_SCAN | 0x0002)
+#define	ESPAD_WRITE	(ESPAD_SCAN | 0x0003)
+#define	ESPAD_ADDR	(ESPAD_SCAN | 0x0004)
+#define	ESPAD_WRTRANS	(ESPAD_SCAN | 0x0005)
+#define	ESPAD_LENGTH	(ESPAD_SCAN | 0x0081)
+/* libusb errors */
+#define	ESPAD_LIBUSB	0x0200
+/* libusb errors range from 0 - -100 OR'ing the bitwise NOT of the libusb error
+ * making the final error code, i.e:
+ * ESPAD_LIBUSB | (~LIBUSB_ERROR_NO_DEVICE)
+ */
+
+/* System Errors, read error in 'errno' */
+#define	ESPAD_SYSTEM	0x0400
+
+/* Custom errors */
+#define	ESPAD_INVCTL	0x0801 /* Invalid Control Byte */
+
+const char *spad_strerror(int errnum);
 void spad_dumphex(void *buf, int siz);
 int spad_init(struct spad_context *ctx);
 int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,

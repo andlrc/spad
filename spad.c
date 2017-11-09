@@ -4,41 +4,39 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
-#define	VENDOR_ID	0x0AB1
-#define	PRODUCT_ID	0x0002
 #define	INTERFACE	0
 #define	TIMEOUT		1000
 
 #define	SPAD_MSB(n)	((n & 0xFF00) >> 8)
 #define	SPAD_LSB(n)	(n & 0xFF)
 
-const char *spad_strerror(enum spad_errors errno)
+const char *spad_strerror(int errnum)
 {
-	switch (errno) {
-	case SPAD_SUCCESS:
-		return "Success";
-	case SPAD_ENOTRANS:
-		return "No Transponder is located within the detection range of the Reader";
-	case SPAD_ECRC:
-		return "CRC16 data error at received data.";
-	case SPAD_EWRITE:
-		return "Attempt to write on a read-only storing-area.";
-	case SPAD_EADDR:
-		return "The address is beyond the max. address space of the Transponder.";
-	case SPAD_EWRTRANS:
-		return "A special command is not applicable to the Transponder.";
-	case SPAD_ELENGTH:
-		return "Protocol is too short or too long";
-	case SPAD_ELIBUSB:
-		return "libusb errors";
-	case SPAD_EERRNO:
-		return "stdlib errors";
-	case SPAD_EUNKNOWN:
-		return "Unspecified error";
-	}
+	if (errnum & ESPAD_LIBUSB)
+		return libusb_strerror(~(errnum ^ ESPAD_LIBUSB));
 
-	return "Unknown errno";
+	switch (errnum) {
+	case ESPAD_SYSTEM:
+		return strerror(errno);
+	case ESPAD_NOTRANS:
+		return "No Transponder is located within the detection range of the Reader";
+	case ESPAD_CRC:
+		return "CRC16 data error at received data.";
+	case ESPAD_WRITE:
+		return "Attempt to write on a read-only storing-area.";
+	case ESPAD_ADDR:
+		return "The address is beyond the max. address space of the Transponder.";
+	case ESPAD_WRTRANS:
+		return "A special command is not applicable to the Transponder.";
+	case ESPAD_LENGTH:
+		return "Protocol is too short or too long";
+	case ESPAD_INVCTL:
+		return "Invalid control byte";
+	default:
+		return "Unknown errnum";
+	}
 }
 
 void spad_dumphex(void *buf, int siz)
@@ -58,8 +56,8 @@ int spad_init(struct spad_context *ctx)
 	int rc;
 	int debuglvl = LIBUSB_LOG_LEVEL_ERROR;
 	char *debug;
-	if ((rc = libusb_init(&ctx->usb_context)) != 0)
-		return SPAD_ELIBUSB;
+	if ((rc = libusb_init(&ctx->usb_context)))
+		return ESPAD_LIBUSB | ~rc;
 
 	debug = getenv("SPAD_DEBUG");
 	if (debug && *debug) {
@@ -68,18 +66,19 @@ int spad_init(struct spad_context *ctx)
 	libusb_set_debug(ctx->usb_context, debuglvl);
 
 	ctx->dev_handle =
-	    libusb_open_device_with_vid_pid(ctx->usb_context, VENDOR_ID,
-					    PRODUCT_ID);
+	    libusb_open_device_with_vid_pid(ctx->usb_context,
+					    ctx->vendor_id,
+					    ctx->product_id);
 	if (!ctx->dev_handle)
-		return SPAD_ELIBUSB;
+		return ESPAD_LIBUSB | ~LIBUSB_ERROR_NO_DEVICE;
 
 	if (libusb_kernel_driver_active(ctx->dev_handle, INTERFACE))
 		if ((rc = libusb_detach_kernel_driver(ctx->dev_handle,
-						      INTERFACE)) != 0)
-			return SPAD_ELIBUSB;
+						      INTERFACE)))
+			return ESPAD_LIBUSB | ~rc;
 
 	if ((rc = libusb_claim_interface(ctx->dev_handle, INTERFACE)))
-		return SPAD_ELIBUSB;
+		return ESPAD_LIBUSB | ~rc;
 
 	return SPAD_SUCCESS;
 }
@@ -125,7 +124,7 @@ int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,
 	 */
 	bufsiz = reqsiz + 6;
 	if (!(buf = malloc(bufsiz)))
-		return SPAD_EERRNO;
+		return ESPAD_SYSTEM;
 
 	buf[0] = 0x02;
 	buf[1] = SPAD_MSB(bufsiz);
@@ -143,8 +142,10 @@ int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,
 				  buf, bufsiz, &written, timeout);
 	free(buf);
 
-	if (rc != LIBUSB_SUCCESS || written != bufsiz)
-		return SPAD_ELENGTH;
+	if (rc)
+		return ESPAD_LIBUSB | ~rc;
+	if (written != bufsiz)
+		return ESPAD_LENGTH;
 
 	return SPAD_SUCCESS;
 }
@@ -169,15 +170,15 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 	 */
 	bufsiz = ressiz + 6;
 	if (!(buf = malloc(bufsiz)))
-		return SPAD_EERRNO;
+		return ESPAD_SYSTEM;
 
 	rc = libusb_bulk_transfer(ctx->dev_handle,
 				  0x81 | LIBUSB_ENDPOINT_IN,
 				  buf, bufsiz, &received, timeout);
 
-	if (rc != LIBUSB_SUCCESS) {
+	if (rc) {
 		free(buf);
-		return SPAD_ELIBUSB;
+		return ESPAD_LIBUSB | ~rc;
 	}
 
 	/* Validate Checksum */
@@ -185,13 +186,13 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 	if (buf[received - 2] != SPAD_LSB(crc) ||
 	    buf[received - 1] != SPAD_MSB(crc)) {
 		free(buf);
-		return SPAD_ECRC;
+		return ESPAD_CRC;
 	}
 
 	/* Validate Length */
 	if (buf[1] != SPAD_MSB(received) || buf[2] != SPAD_LSB(received)) {
 		free(buf);
-		return SPAD_ELENGTH;
+		return ESPAD_LENGTH;
 	}
 
 	/* Check status */
@@ -216,14 +217,14 @@ int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb)
 	int i;
 	unsigned char *tag;
 
-	if ((rc = spad_write(ctx, reqbuf, sizeof(reqbuf), TIMEOUT)) < 0)
+	if ((rc = spad_write(ctx, reqbuf, sizeof(reqbuf), TIMEOUT)))
 		return rc;
 
-	if ((reslen = spad_read(ctx, resbuf, sizeof(resbuf), TIMEOUT)) < 0)
+	if ((reslen = spad_read(ctx, resbuf, sizeof(resbuf), TIMEOUT)))
 		return reslen;
 
 	if (resbuf[0] != 0xB0)	/* CONTROL-BYTE */
-		return SPAD_EUNKNOWN;
+		return ESPAD_INVCTL;
 
 	/* Tags is the following:
 	 * 1:           CONTROL-BYTE
@@ -248,7 +249,7 @@ int spad_exit(struct spad_context *ctx)
 {
 	int rc;
 	if ((rc = libusb_release_interface(ctx->dev_handle, INTERFACE)))
-		return SPAD_ELIBUSB;
+		return ESPAD_LIBUSB | ~rc;
 
 	libusb_close(ctx->dev_handle);
 	libusb_exit(ctx->usb_context);
