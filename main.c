@@ -5,8 +5,9 @@
 #include <unistd.h>
 
 #define	PROGRAM_NAME	"spad"
-#define	PROGRAM_VERSION	"0.5"
-#define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME " <vendor:product>...\n"
+#define	PROGRAM_VERSION	"0.5.1"
+#define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME				\
+			" [OPTION]... <vendor:product>...\n"
 
 #define	TAG_SIZE	8
 #define	TAGTYPE_SIZE	2
@@ -54,8 +55,7 @@ static void inv_cb(unsigned char type[2], unsigned char tag[8])
 
 	for (i = 0; i < seentags.length; i++) {
 		/* Found tag, bail */
-		if (memcmp(seentags.tags + i * TAG_SIZE, tag, TAG_SIZE) ==
-		    0)
+		if (memcmp(seentags.tags + i * TAG_SIZE, tag, TAG_SIZE) == 0)
 			return;
 	}
 
@@ -63,24 +63,20 @@ static void inv_cb(unsigned char type[2], unsigned char tag[8])
 	seentags.length++;
 	switch (outputtype) {
 	case OUT_PLAIN:
-		for (i = 0; i < TAGTYPE_SIZE; i++) {
-			printf("%02X", ((unsigned char *) type)[i]);
-		}
+		for (i = 0; i < TAGTYPE_SIZE; i++)
+			printf("%02X", type[i]);
 		printf(" ");
-		for (i = 0; i < TAG_SIZE; i++) {
-			printf("%02X", ((unsigned char *) tag)[i]);
-		}
+		for (i = 0; i < TAG_SIZE; i++)
+			printf("%02X", tag[i]);
 		printf("\n");
 		break;
 	case OUT_JSON:
 		printf("{\"type\":\"");
-		for (i = 0; i < TAGTYPE_SIZE; i++) {
-			printf("%02X", ((unsigned char *) type)[i]);
-		}
+		for (i = 0; i < TAGTYPE_SIZE; i++)
+			printf("%02X", type[i]);
 		printf("\",\"tag\":\"");
-		for (i = 0; i < TAG_SIZE; i++) {
-			printf("%02X", ((unsigned char *) tag)[i]);
-		}
+		for (i = 0; i < TAG_SIZE; i++)
+			printf("%02X", tag[i]);
 		printf("\"}\n");
 	}
 	fflush(stdout);

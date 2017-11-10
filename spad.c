@@ -185,7 +185,7 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 
 	/* Check status */
 	if (buf[5] != 0x00) {
-		rc = 0 - (int) buf[5];
+		rc = ESPAD_SCAN | buf[5];
 		free(buf);
 		return rc;
 	}
