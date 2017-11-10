@@ -32,15 +32,14 @@ typedef void (*spad_inventory_callback) (unsigned char tagtype[2],
 #define	ESPAD_SYSTEM	0x0400
 
 /* Custom errors */
-#define	ESPAD_INVCTL	0x0801 /* Invalid Control Byte */
+#define	ESPAD_INVCTL	0x0801	/* Invalid Control Byte */
 
 const char *spad_strerror(int errnum);
-void spad_dumphex(void *buf, int siz);
 int spad_init(struct spad_context *ctx);
 int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,
 	       int timeout);
 int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
-	      int timeout);
+	      int *written, int timeout);
 int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb);
 int spad_exit(struct spad_context *ctx);
 

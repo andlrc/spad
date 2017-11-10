@@ -7,17 +7,26 @@
 #define	PROGRAM_NAME	"spad"
 #define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME " <vendor:product>...\n"
 #define	TAG_SIZE	8
+#define	TAGTYPE_SIZE	2
 static struct {
 	unsigned char *tags;
 	int size;
 	int length;
 } seentags;
 
+enum {
+	OUT_PLAIN,
+	OUT_JSON
+} output_type;
+
+static int outputtype;
+
 static void print_help(void)
 {
 	printf(PROGRAM_USAGE "\n"
 	       "  -1    use the device '0ab1:0002'\n"
 	       "  -2    use the device '0ab1:0004'\n"
+	       "  -j    output JSON\n"
 	       "\n"
 	       "  -h    show this help and exit\n");
 }
@@ -38,31 +47,53 @@ static void inv_cb(unsigned char type[2], unsigned char tag[8])
 
 	for (i = 0; i < seentags.length; i++) {
 		/* Found tag, bail */
-		if (memcmp(seentags.tags + i * TAG_SIZE, tag, TAG_SIZE) == 0)
+		if (memcmp(seentags.tags + i * TAG_SIZE, tag, TAG_SIZE) ==
+		    0)
 			return;
 	}
 
 	memcpy(seentags.tags + seentags.length * TAG_SIZE, tag, TAG_SIZE);
 	seentags.length++;
-	/* type = byte byte, tag[0], tag[1], tag[2], tag[3], tag[4], tag[5],
-	 * tag[6], tag[7] */
-	spad_dumphex(type, 10);
+	switch (outputtype) {
+	case OUT_PLAIN:
+		for (i = 0; i < TAGTYPE_SIZE; i++) {
+			printf("%02X", ((unsigned char *) type)[i]);
+		}
+		printf(" ");
+		for (i = 0; i < TAG_SIZE; i++) {
+			printf("%02X", ((unsigned char *) tag)[i]);
+		}
+		printf("\n");
+		break;
+	case OUT_JSON:
+		printf("{\"type\":\"");
+		for (i = 0; i < TAGTYPE_SIZE; i++) {
+			printf("%02X", ((unsigned char *) type)[i]);
+		}
+		printf("\",\"tag\":\"");
+		for (i = 0; i < TAG_SIZE; i++) {
+			printf("%02X", ((unsigned char *) tag)[i]);
+		}
+		printf("\"}\n");
+	}
+	fflush(stdout);
 }
 
 int main(int argc, char **argv)
 {
 	struct spad_context ctxs[8];
 	int ctxcnt;
-	struct spad_context ctx;
 	int rc;
 	int c;
 	int i;
 	char *endp;
 
+	outputtype = OUT_PLAIN;
+
 	memset(ctxs, 0, sizeof(ctxs));
 	ctxcnt = 0;
 
-	while ((c = getopt(argc, argv, "h12")) != -1) {
+	while ((c = getopt(argc, argv, "h12j")) != -1) {
 		switch (c) {
 		case 'h':
 			print_help();
@@ -77,8 +108,10 @@ int main(int argc, char **argv)
 			ctxs[ctxcnt].product_id = 0x0004;
 			ctxcnt++;
 			break;
+		case 'j':
+			outputtype = OUT_JSON;
+			break;
 		default:
-			fprintf(stderr, PROGRAM_USAGE);
 			return 1;
 		}
 	}
@@ -95,8 +128,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < ctxcnt; i++) {
-		ctx = ctxs[i];
-		if ((rc = spad_init(&ctx))) {
+		if ((rc = spad_init(&ctxs[i]))) {
 			fprintf(stderr, "%s\n", spad_strerror(rc));
 			return 1;
 		}
@@ -112,15 +144,15 @@ int main(int argc, char **argv)
 
 	for (;;) {
 		for (i = 0; i < ctxcnt; i++) {
-			ctx = ctxs[i];
-			if ((rc = spad_inventory(&ctx, inv_cb)))
-				fprintf(stderr, "%d, %s\n", rc, spad_strerror(rc));
+			if ((rc = spad_inventory(&ctxs[i], inv_cb)))
+				fprintf(stderr, "%d, %s\n", rc,
+					spad_strerror(rc));
 			sleep(1);
 		}
 	}
 
 	for (i = 0; i < ctxcnt; i++) {
-		spad_exit(&ctx);
+		spad_exit(&ctxs[i]);
 	}
 
 	return 0;

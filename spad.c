@@ -39,18 +39,6 @@ const char *spad_strerror(int errnum)
 	}
 }
 
-void spad_dumphex(void *buf, int siz)
-{
-	int i;
-	if (siz > 0) {
-		for (i = 0; i < siz; i++)
-			printf("%02x ", ((unsigned char *) buf)[i]);
-		printf("\n");
-	} else {
-		printf("(empty)\n");
-	}
-}
-
 int spad_init(struct spad_context *ctx)
 {
 	int rc;
@@ -151,7 +139,7 @@ int spad_write(struct spad_context *ctx, unsigned char *reqbuf, int reqsiz,
 }
 
 int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
-	      int timeout)
+	      int *written, int timeout)
 {
 	unsigned char *buf;
 	int bufsiz;
@@ -204,7 +192,8 @@ int spad_read(struct spad_context *ctx, unsigned char *resbuf, int ressiz,
 
 	memcpy(resbuf, buf + 4, received - 6);
 	free(buf);
-	return received - 6;
+	*written = received - 6;
+	return SPAD_SUCCESS;
 }
 
 int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb)
@@ -220,8 +209,8 @@ int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb)
 	if ((rc = spad_write(ctx, reqbuf, sizeof(reqbuf), TIMEOUT)))
 		return rc;
 
-	if ((reslen = spad_read(ctx, resbuf, sizeof(resbuf), TIMEOUT)))
-		return reslen;
+	if ((rc = spad_read(ctx, resbuf, sizeof(resbuf), &reslen, TIMEOUT)))
+		return rc;
 
 	if (resbuf[0] != 0xB0)	/* CONTROL-BYTE */
 		return ESPAD_INVCTL;
