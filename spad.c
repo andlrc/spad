@@ -228,7 +228,7 @@ int spad_inventory(struct spad_context *ctx, spad_inventory_callback cb)
 
 	for (i = 0; i < tagcnt; i++) {
 		tag = resbuf + 3 + 10 * i;
-		cb(tag, tag + 2);
+		cb(ctx, tag, tag + 2);
 	}
 
 	return SPAD_SUCCESS;

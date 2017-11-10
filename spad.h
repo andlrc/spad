@@ -9,7 +9,8 @@ struct spad_context {
 	struct libusb_device_handle *dev_handle;
 };
 
-typedef void (*spad_inventory_callback) (unsigned char tagtype[2],
+typedef void (*spad_inventory_callback) (struct spad_context *ctx,
+					 unsigned char tagtype[2],
 					 unsigned char tag[8]);
 
 #define	SPAD_SUCCESS	0
