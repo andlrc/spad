@@ -5,7 +5,9 @@
 #include <unistd.h>
 
 #define	PROGRAM_NAME	"spad"
+#define	PROGRAM_VERSION	"0.5"
 #define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME " <vendor:product>...\n"
+
 #define	TAG_SIZE	8
 #define	TAGTYPE_SIZE	2
 static struct {
@@ -29,6 +31,11 @@ static void print_help(void)
 	       "  -j    output JSON\n"
 	       "\n"
 	       "  -h    show this help and exit\n");
+}
+
+static void print_version(void)
+{
+	printf(PROGRAM_NAME " " PROGRAM_VERSION "\n");
 }
 
 static void inv_cb(unsigned char type[2], unsigned char tag[8])
@@ -93,10 +100,13 @@ int main(int argc, char **argv)
 	memset(ctxs, 0, sizeof(ctxs));
 	ctxcnt = 0;
 
-	while ((c = getopt(argc, argv, "h12j")) != -1) {
+	while ((c = getopt(argc, argv, "hV12j")) != -1) {
 		switch (c) {
 		case 'h':
 			print_help();
+			return 0;
+		case 'V':
+			print_version();
 			return 0;
 		case '1':
 			ctxs[ctxcnt].vendor_id = 0x0AB1;
