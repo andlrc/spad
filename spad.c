@@ -12,30 +12,42 @@
 #define	SPAD_MSB(n)	((n & 0xFF00) >> 8)
 #define	SPAD_LSB(n)	(n & 0xFF)
 
+static const char *spad_errors[] = {
+	/* Unknown error */	"Unknown errnum",							
+	/* ESPAD_NOTRANS */	"No Transponder is located within the detection range of the Reader",	
+	/* ESPAD_CRC */		"CRC16 data error at received data.",					
+	/* ESPAD_WRITE */	"Attempt to write on a read-only storing-area.",			
+	/* ESPAD_ADDR */	"The address is beyond the max. address space of the Transponder.",	
+	/* ESPAD_WRTRANS */	"A special command is not applicable to the Transponder.",		
+	/* ESPAD_LENGTH */	"Protocol is too short or too long",					
+	/* ESPAD_INVCTL */	"Invalid control byte"							
+};
+
 const char *spad_strerror(int errnum)
 {
 	if (errnum & ESPAD_LIBUSB)
 		return libusb_strerror(~(errnum ^ ESPAD_LIBUSB));
 
-	switch (errnum) {
-	case ESPAD_SYSTEM:
+	if (errnum == ESPAD_SYSTEM)
 		return strerror(errno);
+
+	switch (errnum) {
 	case ESPAD_NOTRANS:
-		return "No Transponder is located within the detection range of the Reader";
+		return spad_errors[1];
 	case ESPAD_CRC:
-		return "CRC16 data error at received data.";
+		return spad_errors[2];
 	case ESPAD_WRITE:
-		return "Attempt to write on a read-only storing-area.";
+		return spad_errors[3];
 	case ESPAD_ADDR:
-		return "The address is beyond the max. address space of the Transponder.";
+		return spad_errors[4];
 	case ESPAD_WRTRANS:
-		return "A special command is not applicable to the Transponder.";
+		return spad_errors[5];
 	case ESPAD_LENGTH:
-		return "Protocol is too short or too long";
+		return spad_errors[6];
 	case ESPAD_INVCTL:
-		return "Invalid control byte";
+		return spad_errors[7];
 	default:
-		return "Unknown errnum";
+		return spad_errors[0];
 	}
 }
 

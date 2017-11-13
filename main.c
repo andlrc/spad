@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 #define	PROGRAM_NAME	"spad"
-#define	PROGRAM_VERSION	"0.5.2"
+#define	PROGRAM_VERSION	"0.5.3"
 #define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME				\
 			" [OPTION]... <vendor:product>...\n"
 
@@ -69,8 +69,7 @@ static void inv_cb(struct spad_context *ctx, unsigned char type[2],
 		printf(" ");
 		for (i = 0; i < TAG_SIZE; i++)
 			printf("%02X", tag[i]);
-		printf(" %04X:%04X\n",
-		       ctx->vendor_id, ctx->product_id);
+		printf(" %04X:%04X\n", ctx->vendor_id, ctx->product_id);
 		break;
 	case OUT_JSON:
 		printf("{\"type\":\"");
