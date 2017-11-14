@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 #define	PROGRAM_NAME	"spad"
-#define	PROGRAM_VERSION	"0.5.3"
+#define	PROGRAM_VERSION	"0.5.4"
 #define	PROGRAM_USAGE	"Usage: " PROGRAM_NAME				\
 			" [OPTION]... <vendor:product>...\n"
 
@@ -52,6 +52,7 @@ static void inv_cb(struct spad_context *ctx, unsigned char type[2],
 			perror("realloc");
 			exit(1);
 		}
+		seentags.tags = seentmp;
 	}
 
 	for (i = 0; i < seentags.length; i++) {
